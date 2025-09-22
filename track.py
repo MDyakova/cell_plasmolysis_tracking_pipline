@@ -1,0 +1,164 @@
+import numpy as np
+import glob
+import argparse
+from cellpose import models, core, io, plot
+from pathlib import Path
+from tqdm import trange
+import matplotlib.pyplot as plt
+import tifffile as tiff
+from PIL import Image
+import os
+import pandas as pd
+import trackpy as tp
+from skimage.measure import regionprops_table
+
+from utilities import find_similar_contours_fast
+
+io.logger_setup() # run this to get printing of progress
+
+
+def main():
+    """
+    Cell segmentation and tracking
+    """
+    # Load model
+    model = models.CellposeModel(gpu=True)
+
+    # Load input parameters
+    parser = argparse.ArgumentParser(description="Input parameters")
+    parser.add_argument("--image_directory", type=str, help="Directory with tiff files")
+    parser.add_argument("--output_directory", type=str, help="Output directory")
+    parser.add_argument("--tile_size", type=int, help="Size of one tile")
+    args = parser.parse_args()
+
+    image_directory = os.path.abspath(args.image_directory)
+    output_directory = os.path.abspath(args.output_directory)
+    os.makedirs(output_directory, exist_ok=True)
+    tile_size = int(args.tile_size)
+
+    # Go throw all subdirectories in the image_directory
+    for root, dirs, files in os.walk(image_directory):
+        # Look for all tif files
+        tiff_files = glob.glob(os.path.join(root, '**', '*.tif'), recursive=True)
+        for file_name in tiff_files:
+            # Read image
+            image = tiff.imread(file_name)
+            # Name to save files
+            file_name_save = file_name.split('/')[-1].split('.tif')[0]
+            # Split image to XY tiles
+            for i in range(0, image.shape[1], tile_size-50):
+                for j in range(0, image.shape[2], tile_size-50):
+                    all_masks_save = []
+                    all_flows_save = []
+                    all_cells = []
+                    # Segmentation for each layer in a XYZ tile
+                    for step in range(image.shape[0]):
+                        k=0
+                        tile_crops = []
+                        diameters_results = []
+                        # image_save = Image.fromarray((image[step][i:i+tile_size, j:j+tile_size]
+                        #                                 /image[step][i:i+tile_size, j:j+tile_size].max()
+                        #                                 *255
+                        #                                 ).astype('uint8'))
+                
+                        # if image_save.size!=(tile_size, tile_size):
+                        #     im = (image[step][i:i+tile_size, j:j+tile_size]
+                        #                 /image[step][i:i+tile_size, j:j+tile_size].max()
+                        #                 *255)
+                        #     image_new = np.zeros((tile_size, tile_size))
+                        #     image_new[0:im.shape[0], 0:im.shape[1]] = im
+                        #     image_save = Image.fromarray(image_new.astype('uint8'))
+                            
+                        # masks_pred, flows, styles = model.eval([np.array(image_save)], 
+                        #                                         niter=1000, 
+                        #                                         cellprob_threshold=0, 
+                        #                                         diameter=40)
+                
+                        # all_flows_save.append(flows)
+                        # pred = np.where(masks_pred[0]>0, masks_pred[0]+1000*k, 0)
+                        # tile_crops.append(pred)
+                
+                        # Make segmentation for each tile for rotation on 0, 90, 180 and 270 degrees
+                        for k in [0, 1, 2, 3]:
+                            # input image for model
+                            image_save = Image.fromarray(np.rot90((image[step][i:i+tile_size, j:j+tile_size]
+                                                /image[step][i:i+400, j:j+400].max()
+                                                *255
+                                                ), k=k).astype('uint8'))
+                            # If image size is not equal the tile size
+                            if image_save.size!=(tile_size, tile_size):
+                                im = (image[step][i:i+tile_size, j:j+tile_size]
+                                        /image[step][i:i+tile_size, j:j+tile_size].max()
+                                        *255
+                                        )
+                                image_new = np.zeros((tile_size, tile_size))
+                                image_new[0:im.shape[0], 0:im.shape[1]] = im
+                                image_save = Image.fromarray(np.rot90(image_new, k=k).astype('uint8'))
+                                
+                            # Make prediction
+                            masks_pred, flows, styles = model.eval([np.array(image_save)], 
+                                                                    niter=1000, 
+                                                                    cellprob_threshold=0, 
+                                                                    diameter=40)
+                
+                            # Back rotation
+                            pred = np.rot90(masks_pred[0], k=-1*k)
+                            pred = np.where(pred>0, pred+1000*k, 0)
+
+                            tile_crops.append(pred)
+                
+                        # Join segmentation for all rotated files
+                        tile_crops_all = np.stack(tile_crops, axis=2)
+                        all_masks = find_similar_contours_fast(tile_crops_all)
+                        # image_save = Image.fromarray((image[step][i:i+tile_size, j:j+tile_size]
+                        #                             /image[step][i:i+tile_size, j:j+tile_size].max()
+                        #                             *255
+                        #                             ).astype('uint8'))
+                        # if image_save.size!=(tile_size, tile_size):
+                        #     image_new = np.zeros((tile_size, tile_size))
+                        #     image_new[0:im.shape[0], 0:im.shape[1]] = im
+                        #     image_save = Image.fromarray(image_new.astype('uint8'))
+                        # result = draw_label_contours(np.array(image_save), all_masks)
+                        all_masks_save.append(all_masks)
+                
+                        # Make tabel with all segmented cells
+                        props = regionprops_table(all_masks, properties=('label', 'centroid', 'area'))
+                        df = pd.DataFrame(props)
+                        df.rename(columns={'centroid-0': 'y', 'centroid-1': 'x'}, inplace=True)
+                        df['frame'] = step
+                        all_cells.append(df)
+
+                    # Combine all frames
+                    df_cells = pd.concat(all_cells, ignore_index=True)
+                    df_cells = df_cells[df_cells['area']>100]
+                    if len(df_cells)>=len(all_masks_save):
+                        # Track using trackpy
+                        tracked = tp.link_df(df_cells, search_range=15, memory=2)
+                        # Optional: remove short-lived tracks
+                        tracked = tp.filter_stubs(tracked, threshold=len(all_masks_save))
+                        all_masks_save = np.stack(all_masks_save)
+                        tracked.reset_index(drop=True, inplace=True)
+                        
+                        for frame in range(len(all_masks_save)):
+                            labels_in_frame = tracked[tracked['frame']==frame]['label']
+                            mask_frame = all_masks_save[frame]
+                            mask_frame = np.where(np.isin(mask_frame, labels_in_frame), mask_frame, 0)
+                            all_masks_save[frame] = mask_frame
+                        
+                        for ind in tracked.index:
+                            label = tracked.loc[ind, 'label']
+                            frame = tracked.loc[ind, 'frame']
+                            cell = tracked.loc[ind, 'particle']
+                            mask_frame = all_masks_save[frame]
+                            mask_frame = np.where(mask_frame==label, cell, mask_frame)
+                            all_masks_save[frame] = mask_frame
+                        
+                        # Save results
+                        video = (image[:, i:i+400, j:j+400]/image[step][i:i+400, j:j+400].max()*255).astype('uint8')
+                        tiff.imwrite(os.path.join(output_directory, f'{file_name_save}_x_{str(j)}_y_{str(i)}.tif'), video.astype(np.uint16))
+                        
+                        tiff.imwrite(os.path.join(output_directory, f'{file_name_save}_x_{str(j)}_y_{str(i)}_labels.tif'), all_masks_save.astype(np.uint16))
+
+if __name__ == "__main__":
+    main()
+
