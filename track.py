@@ -41,22 +41,26 @@ def main():
     parser.add_argument("--image_directory", type=str, help="Directory with tiff files")
     parser.add_argument("--output_directory", type=str, help="Output directory")
     parser.add_argument("--tile_size", type=int, help="Size of one tile")
+    parser.add_argument("--name_filter", type=str, default='', help="Part of file name for filtration")
     args = parser.parse_args()
 
     image_directory = os.path.abspath(args.image_directory)
     output_directory = os.path.abspath(args.output_directory)
     os.makedirs(output_directory, exist_ok=True)
     tile_size = int(args.tile_size)
-
-    with open(os.path.join(output_directory, 'processed_files.txt'), 'r') as f:
-        processed_files = f.read()
-    processed_files = processed_files.split('\n')
+    name_filter = args.name_filter
+    
+    if os.path.exists(os.path.join(output_directory, 'processed_files.txt')):
+        with open(os.path.join(output_directory, 'processed_files.txt'), 'r') as f:
+            processed_files = f.read()
+        processed_files = processed_files.split('\n')
+    else:
+        processed_files = []
 
     # Go throw all subdirectories in the image_directory
-    for root, dirs, files in os.walk(image_directory):
-        # Look for all tif files
-        tiff_files = glob.glob(os.path.join(root, '**', '*.tif'), recursive=True)
-        for file_name in tiff_files:
+    tiff_files = glob.glob(os.path.join(image_directory, '**', '*.tif'), recursive=True)
+    for file_name in tiff_files:
+        if (name_filter in file_name):
             # Read image
             image = tiff.imread(file_name)
             # Name to save files
@@ -67,7 +71,7 @@ def main():
                     file_name = f'{file_name_save}_x_{str(j)}_y_{str(i)}.tif'
                     file_path = os.path.join(output_directory, 
                                             file_name)
-                    if file_name not in processed_files:
+                    if (file_name not in processed_files):
                         all_masks_save = []
                         all_flows_save = []
                         all_cells = []
