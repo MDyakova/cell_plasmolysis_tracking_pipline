@@ -40,6 +40,7 @@ def main():
     parser = argparse.ArgumentParser(description="Input parameters")
     parser.add_argument("--image_directory", type=str, help="Directory with tiff files")
     parser.add_argument("--output_directory", type=str, help="Output directory")
+    parser.add_argument("--frames_exclude_file", type=str, default=None, help="Excel file with incorrect frames")
     parser.add_argument("--tile_size", type=int, help="Size of one tile")
     parser.add_argument("--name_filter", type=str, default='', help="Part of file name for filtration")
     args = parser.parse_args()
@@ -50,6 +51,7 @@ def main():
     tile_size = int(args.tile_size)
     name_filter = args.name_filter
     
+    # Load list with processed files
     if os.path.exists(os.path.join(output_directory, 'processed_files.txt')):
         with open(os.path.join(output_directory, 'processed_files.txt'), 'r') as f:
             processed_files = f.read()
@@ -57,14 +59,28 @@ def main():
     else:
         processed_files = []
 
+    # Load file with incorrect frames for images
+    if args.frames_exclude_file is not None:
+        frames_exclude_file = os.path.abspath(args.frames_exclude_file)
+        incorrect_images = pd.read_excel(frames_exclude_file)
+        incorrect_images = incorrect_images[pd.notna(incorrect_images['Frames to exclude'])]
+
     # Go throw all subdirectories in the image_directory
     tiff_files = glob.glob(os.path.join(image_directory, '**', '*.tif'), recursive=True)
-    for file_name in tiff_files:
-        if (name_filter in file_name):
+    for entire_file_name in tiff_files:
+        if (name_filter in entire_file_name):
             # Read image
-            image = tiff.imread(file_name)
+            image = tiff.imread(entire_file_name)
             # Name to save files
-            file_name_save = file_name.split('/')[-1].split('.tif')[0]
+            file_name_save = entire_file_name.split('/')[-1].split('.tif')[0]
+
+            # Find all incorrect frames for image
+            if args.frames_exclude_file is not None:
+                incorrect_images_file = incorrect_images[incorrect_images['Filename']==entire_file_name.split('/')[-1]]
+                if len(incorrect_images_file)>0:
+                    frames_exclude = str(incorrect_images_file['Frames to exclude'].max())
+                    frames_exclude = [int(i) for i in frames_exclude.split(';')]
+                    image = np.delete(image, frames_exclude, axis=0)
             # Split image to XY tiles
             for i in range(0, image.shape[1], tile_size-50):
                 for j in range(0, image.shape[2], tile_size-50):
