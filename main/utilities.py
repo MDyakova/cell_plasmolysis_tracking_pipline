@@ -2,13 +2,15 @@
 Functions for track.py code
 """
 
-import numpy as np
 from collections import defaultdict
 from itertools import combinations
-
+import numpy as np
 
 # Function to join mask pairs
 def join_pairs(pairs):
+    """
+    Function to find intersected labels
+    """
     # Create a dictionary to map each element to its group
     groups = defaultdict(set)
 
@@ -29,6 +31,9 @@ def join_pairs(pairs):
 
 
 def find_similar_contours_fast(image_for_masks):
+    """
+    Function to join intersected labels
+    """
     mask_id, numbers = np.unique(image_for_masks.reshape(-1), return_counts=True)
     mask_numbers = dict(zip(mask_id, numbers))
     groups_short = [

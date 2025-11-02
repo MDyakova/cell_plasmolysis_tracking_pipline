@@ -1,34 +1,20 @@
-import numpy as np
+"""
+Code for cell segmentation and tracking
+"""
+
+import os
 import glob
 import argparse
-from cellpose import models, core, io, plot
-from pathlib import Path
-from tqdm import trange
-import matplotlib.pyplot as plt
+import numpy as np
+from cellpose import models, io
 import tifffile as tiff
 from PIL import Image
-import os
 import pandas as pd
 import trackpy as tp
 from skimage.measure import regionprops_table
-from sklearn.neighbors import NearestNeighbors
-
 from utilities import find_similar_contours_fast
 
 io.logger_setup()  # run this to get printing of progress
-
-
-def frame_nn_p10(df):
-    nn_d = []
-    for f, g in df.groupby("frame"):
-        if len(g) < 2:
-            continue
-        X = g[["x", "y"]].to_numpy()
-        nbrs = NearestNeighbors(n_neighbors=2).fit(X)
-        dists, _ = nbrs.kneighbors(X)
-        nn_d.extend(dists[:, 1])  # distance to nearest other point
-    return np.percentile(nn_d, 10) if nn_d else np.inf
-
 
 def main():
     """
@@ -61,7 +47,7 @@ def main():
 
     # Load list with processed files
     if os.path.exists(os.path.join(output_directory, "processed_files.txt")):
-        with open(os.path.join(output_directory, "processed_files.txt"), "r") as f:
+        with open(os.path.join(output_directory, "processed_files.txt"), "r", encoding="utf-8") as f:
             processed_files = f.read()
         processed_files = processed_files.split("\n")
     else:
@@ -99,16 +85,13 @@ def main():
             for i in range(0, image.shape[1], tile_size - 50):
                 for j in range(0, image.shape[2], tile_size - 50):
                     file_name = f"{file_name_save}_x_{str(j)}_y_{str(i)}.tif"
-                    file_path = os.path.join(output_directory, file_name)
                     if file_name not in processed_files:
                         all_masks_save = []
-                        all_flows_save = []
                         all_cells = []
                         # Segmentation for each layer in a XYZ tile
                         for step in range(image.shape[0]):
                             k = 0
                             tile_crops = []
-                            diameters_results = []
 
                             # Make segmentation for each tile for rotation on 0, 90, 180 and 270 degrees
                             for k in [0, 1, 2, 3]:
@@ -145,7 +128,7 @@ def main():
                                     )
 
                                 # Make prediction
-                                masks_pred, flows, styles = model.eval(
+                                masks_pred, _, _ = model.eval(
                                     [np.array(image_save)],
                                     niter=1000,
                                     cellprob_threshold=0,
@@ -256,7 +239,9 @@ def main():
                                     all_masks_save.astype(np.uint16),
                                 )
                         with open(
-                            os.path.join(output_directory, "processed_files.txt"), "a"
+                            os.path.join(output_directory, "processed_files.txt"),
+                            "a",
+                            encoding="utf-8"
                         ) as f:
                             f.write(
                                 f"{file_name_save}_x_{str(j)}_y_{str(i)}.tif" + "\n"

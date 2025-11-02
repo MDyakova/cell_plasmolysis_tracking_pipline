@@ -1,17 +1,16 @@
+"""
+Compute cell sizes
+"""
+
+import os
+import argparse
 import numpy as np
-from pathlib import Path
-from tqdm import trange
 import matplotlib.pyplot as plt
 import tifffile as tiff
-from PIL import Image
-import os
 import pandas as pd
-import trackpy as tp
 import cv2
-import matplotlib.pyplot as plt
-from matplotlib.patches import Ellipse
 from skimage.transform import resize
-import argparse
+
 
 
 def main():
@@ -211,9 +210,9 @@ def main():
                             # Rotate image to make cell horizontal
                             (h, w) = labels_with_cell_sq.shape[:2]
                             center = (w // 2, h // 2)
-                            M = cv2.getRotationMatrix2D(center, angle, 1.0)
+                            matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
                             rotated_image = cv2.warpAffine(
-                                image_with_cell_sq, M, (w, h)
+                                image_with_cell_sq, matrix, (w, h)
                             )
 
                             # Save rotated cell to mask
@@ -312,7 +311,7 @@ def main():
                             )
 
                         # Cut cell from big mask
-                        z, y, x = np.where(arr_resized > 0)
+                        _, y, x = np.where(arr_resized > 0)
                         arr_resized = arr_resized[
                             :, y.min() - 5 : y.max() + 5, x.min() - 5 : x.max() + 5
                         ]
@@ -336,7 +335,6 @@ def main():
                             cell_sizes["length_center"]
                             == cell_sizes["length_center"].min()
                         )
-                        minimal_length = cell_sizes.loc[min_index, "length_center"]
                         maximal_length = cell_sizes.loc[
                             : min_index - 1, "length_center"
                         ].max()
@@ -345,7 +343,7 @@ def main():
                         )
 
                         # Save individual images
-                        fig, axes = plt.subplots(
+                        _, axes = plt.subplots(
                             3,
                             1,
                             figsize=(5, 6),
@@ -415,11 +413,11 @@ def main():
                         )
                         os.makedirs(before_after_ind_dir, exist_ok=True)
                         tiff.imwrite(
-                            os.path.join(before_after_ind_dir, f"before.tif"),
+                            os.path.join(before_after_ind_dir, "before.tif"),
                             arr_resized_no_contours[max_index],
                         )
                         tiff.imwrite(
-                            os.path.join(before_after_ind_dir, f"after.tif"),
+                            os.path.join(before_after_ind_dir, "after.tif"),
                             arr_resized_no_contours[min_index],
                         )
                     except Exception as e:
