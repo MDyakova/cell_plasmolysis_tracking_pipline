@@ -14,7 +14,7 @@ Segment, track, and quantify cell geometry over time to study plasmolysis. The t
 Download existing image (recommended):
 
 ```bash
-docker pull -t cell_plasmolysis:v1 .
+docker pull mdyakova/cell_plasmolysis:v1
 ```
 
 or build the image (pre-caches Cellpose CPSAM weights during build for faster first run):
@@ -26,27 +26,13 @@ docker build -t cell_plasmolysis:v1 .
 Run segmentation + tracking (with GPU and a bind mount; adjust paths as needed):
 
 ```bash
-docker run --rm --gpus all \
-  -v "C:\work_dir\cell_tracking_files:/cell_tracking_files" \
-  cell_plasmolysis:v1 \
-  python track.py \
-    --image_directory "/cell_tracking_files/data/Acetate" \
-    --output_directory "/cell_tracking_files/tracking_results" \
-    --tile_size 400 \
-    --name_filter roi0 \
-    --frames_exclude_file "/cell_tracking_files/ROIs to be segmented 20251029.xlsx"
+docker run --rm --gpus all -v "C:\work_dir\cell_tracking_files:/cell_tracking_files" mdyakova/cell_plasmolysis:v1 python track.py --image_directory "/cell_tracking_files/data/Acetate" --output_directory "/cell_tracking_files/tracking_results" --tile_size 400 --name_filter roi0 --frames_exclude_file "/cell_tracking_files/ROIs to be segmented 20251029.xlsx"
 ```
 
 Compute features:
 
 ```bash
-docker run --rm --gpus all \
-  -v "C:\work_dir\cell_tracking_files:/cell_tracking_files" \
-  cell_plasmolysis:v1 \
-  python cell_features.py \
-    --labels_directory "/cell_tracking_files/tracking_results" \
-    --output_directory "/cell_tracking_files/final_results" \
-    --selected_ids "/cell_tracking_files/Acetate Label Selection.xlsx"
+docker run --rm --gpus all -v "C:\work_dir\cell_tracking_files:/cell_tracking_files" mdyakova/cell_plasmolysis:v1 python cell_features.py --labels_directory "/cell_tracking_files/tracking_results" --output_directory "/cell_tracking_files/final_results" --selected_ids "/cell_tracking_files/Acetate Label Selection.xlsx"
 ```
 
 ### Option B — Local Python (no Docker)
@@ -252,7 +238,7 @@ python3.8 cell_features.py --labels_directory "../Avik/../Avik/tracking_251016/A
 
 
 docker build -t cell_plasmolysis:v1 .
-docker run --rm --gpus all -v "C:\work_dir\cell_tracking_files:/cell_tracking_files" cell_plasmolysis:v1 python track.py --image_directory "/cell_tracking_files/data/Acetate" --output_directory "/cell_tracking_files/tracking_results" --tile_size 400 --name_filter roi0 --frames_exclude_file "/cell_tracking_files/ROIs to be segmented 20251029.xlsx"
+docker run --rm --gpus all -v "C:\work_dir\cell_tracking_files:/cell_tracking_files" mdyakova/cell_plasmolysis:v1 python track.py --image_directory "/cell_tracking_files/data/Acetate" --output_directory "/cell_tracking_files/tracking_results" --tile_size 400 --name_filter roi0 --frames_exclude_file "/cell_tracking_files/ROIs to be segmented 20251029.xlsx"
 
-docker run --rm --gpus all -v "C:\work_dir\cell_tracking_files:/cell_tracking_files" cell_plasmolysis:v1 python cell_features.py --labels_directory "/cell_tracking_files/tracking_results" --output_directory "/cell_tracking_files/final_results" --selected_ids "/cell_tracking_files/Acetate Label Selection.xlsx"
+docker run --rm --gpus all -v "C:\work_dir\cell_tracking_files:/cell_tracking_files" mdyakova/cell_plasmolysis:v1 python cell_features.py --labels_directory "/cell_tracking_files/tracking_results" --output_directory "/cell_tracking_files/final_results" --selected_ids "/cell_tracking_files/Acetate Label Selection.xlsx"
 
