@@ -347,8 +347,8 @@ def main():
                             3,
                             1,
                             figsize=(5, 6),
-                            constrained_layout=True,
-                            gridspec_kw={"height_ratios": [2, 2, 1]},
+                            # constrained_layout=False,
+                            gridspec_kw={"height_ratios": [2, 2, 1]}
                         )
                         img = arr_resized[max_index]
                         axes[0].imshow(img[2:-2, 2:-2], cmap="gray", aspect="auto")

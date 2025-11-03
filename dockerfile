@@ -1,26 +1,24 @@
-# Load base image
-FROM python:3.8 AS builder
+FROM python:3.8-slim
 
-# Install libraries
-COPY settings /settings
-RUN chmod -R 777 /settings
-RUN bash -e /settings/install_viennarna.sh && rm /settings/install_viennarna.sh
+# Add runtime libs needed by OpenCV GUI wheels
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1 \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender1 \
+ && rm -rf /var/lib/apt/lists/*
 
-RUN pip3 install --no-cache-dir --upgrade pip && \
-    pip3 install --no-cache-dir -r /settings/requirements.txt
-
-FROM builder AS main
-
-EXPOSE 5000
-
-# Copy files
-COPY main /main
-RUN chmod -R 777 /main
 WORKDIR /main
+COPY main /main
+RUN pip3 install --no-cache-dir --upgrade pip && \
+    pip3 install --no-cache-dir -r requirements.txt
 
-# # Run unit-tests
-# RUN python3 -m pytest unit_tests.py
+# Pre-cache CPSAM weights during build
+RUN python - <<'PY'
+from cellpose import models
+# This will download cpsam into ~/.cellpose/models/
+_ = models.CellposeModel(gpu=False, pretrained_model='cpsam')
+PY
 
-# # Launch code
-ENTRYPOINT ["python"]
-CMD ["main.py"]
+CMD ["python", "track.py"]
