@@ -89,6 +89,10 @@ def main():
         )
         labels = tiff.imread(os.path.join(labels_directory, file_name))
 
+        # if file is outside
+        if image.shape != labels.shape:
+            labels = labels[:, :image.shape[1], :image.shape[2]]
+
         # Check that files if correct
         if image.shape == labels.shape:
             steps_number, shape_y, shape_x = labels.shape
